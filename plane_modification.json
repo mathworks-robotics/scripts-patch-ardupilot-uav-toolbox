@@ -1,0 +1,144 @@
+{
+  "files": [
+    {
+      "path": "ArduPlane/ArduPlane.cpp",
+      "comment_style": "//",
+      "insertions": [
+        {
+          "line": 61,
+          "type": "insert",
+          "tag": "simulink-fasttask",
+          "code": [
+            "#ifdef SIMULINK_APP_ENABLED",
+            "    FAST_TASK(run_Simulink_step),",
+            "#endif"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "ArduPlane/Plane.h",
+      "comment_style": "//",
+      "insertions": [
+        {
+          "line": 109,
+          "type": "insert",
+          "tag": "simulink-includes",
+          "code": [
+            "#ifdef SIMULINK_APP_ENABLED",
+            "#include <AC_Simulink/AC_Simulink_Base.h>",
+            "#include <AC_Simulink/AC_Simulink_Factory.h>",
+            "#endif"
+          ]
+        },
+        {
+          "line": 816,
+          "type": "insert",
+          "tag": "simulink-handle-classes",
+          "code": [
+            "#ifdef SIMULINK_APP_ENABLED",
+            "    AC_Simulink_Base* ac_simulink = AC_Simulink_Factory::createSimulinkInstance();",
+            "#endif"
+          ]
+        },
+        {
+          "line": 1236,
+          "type": "insert",
+          "tag": "simulink-step-definition",
+          "code": [
+            "#ifdef SIMULINK_APP_ENABLED",
+            "    void run_Simulink_step() { ac_simulink->update(); }",
+            "#endif"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "ArduPlane/system.cpp",
+      "comment_style": "//",
+      "insertions": [
+        {
+          "line": 141,
+          "type": "insert",
+          "tag": "simulink-init",
+          "code": [
+            "#ifdef SIMULINK_APP_ENABLED",
+            "    ac_simulink->init();",
+            "#endif"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "Tools/ardupilotwaf/boards.py",
+      "comment_style": "#",
+      "insertions": [
+        {
+          "line": 163,
+          "type": "insert",
+          "tag": "simulink-lib-enable",
+          "code": [
+            "        if cfg.options.enable_simulink_app:",
+            "            env.AP_LIBRARIES += [",
+            "                'AC_Simulink'",
+            "            ]",
+            "            cfg.msg(\"Enabled Simulink controller\", 'yes')",
+            "            env.DEFINES.update(",
+            "                SIMULINK_APP_ENABLED=1",
+            "            )"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "libraries/AP_HAL_ChibiOS/HAL_ChibiOS_Class.cpp",
+      "comment_style": "//",
+      "insertions": [
+        {
+          "line": 160,
+          "type": "replace",
+          "tag": "simulink-disable-console",
+          "code": [
+            "#if defined(SIMULINK_APP_ENABLED) && defined(DISABLE_MAVLINK_USB)",
+            "        &serial1Driver,",
+            "#else",
+            "        &serial0Driver,",
+            "#endif"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "libraries/AP_SerialManager/AP_SerialManager.cpp",
+      "comment_style": "//",
+      "insertions": [
+        {
+          "line": 440,
+          "type": "insert",
+          "tag": "simulink-disable-mavlink-usb",
+          "code": [
+            "#if defined(SIMULINK_APP_ENABLED) && defined(DISABLE_MAVLINK_USB)",
+            "    state[0].protocol.set(SerialProtocol_None);",
+            "#endif"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "wscript",
+      "comment_style": "#",
+      "insertions": [
+        {
+          "line": 289,
+          "type": "insert",
+          "tag": "simulink-wscript-flag",
+          "code": [
+            "    g.add_option('--enable-simulink-app', action='store_true',",
+            "                 default=False,",
+            "                 help=\"Enables Simulink generated application\")"
+          ]
+        }
+      ]
+    }
+  ]
+}
