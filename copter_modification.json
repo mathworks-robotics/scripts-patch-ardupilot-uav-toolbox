@@ -95,12 +95,27 @@
       "comment_style": "//",
       "insertions": [
         {
+          "line": 139,
+          "type": "insert",
+          "tag": "empty-uart",
+          "code": [
+            "#if defined(SIMULINK_APP_ENABLED) && defined(DISABLE_TELEM1_CONSOLE)",
+            "       static Empty::UARTDriver serialEmptyDriver;",
+            "#endif"
+          ]
+        },
+
+        {
           "line": 160,
           "type": "replace",
           "tag": "simulink-disable-console",
           "code": [
             "#if defined(SIMULINK_APP_ENABLED) && defined(DISABLE_MAVLINK_USB)",
+            "   #ifndef DISABLE_TELEM1_CONSOLE",
             "        &serial1Driver,",
+            "   #else",
+            "        &serialEmptyDriver,",
+            "   #endif",
             "#else",
             "        &serial0Driver,",
             "#endif"
