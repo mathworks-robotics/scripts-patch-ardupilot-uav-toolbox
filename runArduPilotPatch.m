@@ -39,19 +39,24 @@ if ~ismember(vehicleType, {'copter', 'plane'})
     error('Invalid vehicle type. Use "Copter" or "Plane".');
 end
 
-% Determine JSON file path based on vehicle type
+% Determine JSON file paths
 scriptDir = fileparts(mfilename('fullpath'));  % Directory of this script
-jsonFileName = [vehicleType, '_modification.json'];  % .json file
-jsonPath = fullfile(scriptDir, jsonFileName);
+commonJsonPath = fullfile(scriptDir, 'common_modification.json');
+vehicleJsonPath = fullfile(scriptDir, [vehicleType, '_modification.json']);
 
-% Check if JSON file exists
-if ~isfile(jsonPath)
-    error('JSON configuration file not found: %s', jsonPath);
+% Check if JSON files exist
+if ~isfile(commonJsonPath)
+    error('Common JSON configuration file not found: %s', commonJsonPath);
+end
+if ~isfile(vehicleJsonPath)
+    error('Vehicle JSON configuration file not found: %s', vehicleJsonPath);
 end
 
-% Apply code insertions using the existing function
+% Apply common code insertions first, then vehicle-specific
+fprintf('Applying common code insertions...\n');
+applyCodeInsertions(rootPath, commonJsonPath);
 fprintf('Applying code insertions for %s...\n', upper(vehicleType));
-applyCodeInsertions(rootPath, jsonPath);
+applyCodeInsertions(rootPath, vehicleJsonPath);
 
 % Prepare source and destination paths for AC_Simulink folder
 sourceFolderCommon = fullfile(scriptDir, 'common');  % e.g., Copter/
@@ -67,6 +72,14 @@ if isfolder(destFolder)
     rmdir(destFolder, 's');  % Remove existing folder
 end
 copyfile(sourceFolderCommon, destFolder,'f');
+
+% Copy SerialPlant protocol files into SITL library
+serialPlantSrc = fullfile(scriptDir, 'SerialPlantProtocol');
+sitlDest = fullfile(rootPath, 'libraries', 'SITL');
+if isfolder(serialPlantSrc)
+    fprintf('Copying SerialPlant protocol files to %s...\n', sitlDest);
+    copyfile(fullfile(serialPlantSrc, '*'), sitlDest, 'f');
+end
 
 fprintf('Simulink patch applied successfully for %s.\n', upper(vehicleType));
 % stop logging
