@@ -1,6 +1,6 @@
 function applyCodeInsertions(rootPath, jsonPath)
-% APPLYCODEINSERTIONS Apply code insertions/replacements described in JSON.
-%   Skips any insertion if the same TAG is already present in the target file.
+% APPLYCODEINSERTIONS Apply code insertions/replacements/wraps described in JSON.
+%   Skips any operation if the same TAG is already present in the target file.
 %
 %   applyCodeInsertions(rootPath, jsonPath)
 %
@@ -10,11 +10,17 @@ function applyCodeInsertions(rootPath, jsonPath)
 %
 % Behavior
 %   - For each file entry in JSON, reads the file into memory and processes
-%     insertions in ascending line order.
-%   - Before applying an insertion/replacement that would add a TAG block,
-%     searches the file for the start tag "<comment_style> TAG: <tag>".
-%     If found, the insertion/replacement is skipped to avoid duplicate inserts.
+%     operations in ascending line order (by "line" or "start_line").
+%   - Before applying an operation that would add a TAG block, searches
+%     the file for the start tag "<comment_style> TAG: <tag>".
+%     If found, the operation is skipped to avoid duplicate edits.
 %   - Writes updated file content with LF line endings.
+%
+% Operation types
+%   "insert"  - Insert code block before the given "line".
+%   "replace" - Replace the given "line" with the code block.
+%   "wrap"    - Wrap lines start_line..end_line (inclusive) with "before"
+%               lines above and "after" lines below.
 
     % Load and decode the JSON configuration file
     jsonText = fileread(jsonPath);
@@ -44,10 +50,38 @@ function applyCodeInsertions(rootPath, jsonPath)
         % Read the file content into a string array (one line per element)
         fileContent = readlines(filePath);
 
-        % Sort insertions by line number ascending
-        % This ensures we apply edits top-to-bottom and can track line shifts correctly
+        % Sort operations by line number ascending
+        % This ensures we apply edits top-to-bottom and can track line shifts correctly.
+        % "wrap" entries use "start_line" instead of "line", so we build a
+        % unified sort key.
         insertions = fileEntry.insertions;
-        [~, idx] = sort([insertions.line]);
+        % Normalize cell array to struct array (jsondecode produces a cell
+        % array when JSON objects have different field sets, e.g. mixed
+        % insert/replace and wrap entries)
+        if iscell(insertions)
+            allFieldNames = {};
+            for k = 1:length(insertions)
+                allFieldNames = union(allFieldNames, fieldnames(insertions{k}), 'stable');
+            end
+            for k = 1:length(insertions)
+                for j = 1:length(allFieldNames)
+                    if ~isfield(insertions{k}, allFieldNames{j})
+                        insertions{k}.(allFieldNames{j}) = [];
+                    end
+                end
+            end
+            insertions = [insertions{:}];
+        end
+
+        sortKeys = zeros(1, length(insertions));
+        for k = 1:length(insertions)
+            if isfield(insertions(k), 'start_line') && ~isempty(insertions(k).start_line)
+                sortKeys(k) = insertions(k).start_line;
+            else
+                sortKeys(k) = insertions(k).line;
+            end
+        end
+        [~, idx] = sort(sortKeys);
         insertions = insertions(idx);
 
         % Initialize line shift tracker
@@ -55,43 +89,56 @@ function applyCodeInsertions(rootPath, jsonPath)
         % so that subsequent operations can adjust their target line numbers
         lineShift = 0;
 
-        % Process each insertion or replacement in order
+        % Process each operation in order
         for i = 1:length(insertions)
             ins = insertions(i);
-            originalLine = ins.line;                         % Line number from JSON
-            adjustedLine = originalLine + lineShift;         % Adjusted for prior edits
-
-            codeBlock = string(ins.code);                    % Convert code block to string array
             opType = lower(strtrim(ins.type));               % Normalize operation type
             tag = strtrim(ins.tag);                          % Clean up tag string
 
-            %Wrap code block with tag markers using appropriate comment style
+            % Build tag marker lines
             startTagLine = strcat(tagPrefix , " TAG: " , tag);
             endTagLine   = strcat(tagPrefix , " END TAG: " , tag);
-            taggedBlock = [startTagLine; string(codeBlock); endTagLine];
 
-            % If the tag already exists anywhere in the file, skip this insertion
-            % We search for an exact line match of the start tag.
+            % If the tag already exists anywhere in the file, skip this operation
             tagExistsIdx = find(fileContent == startTagLine, 1, 'first');
             if ~isempty(tagExistsIdx)
-                fprintf('Skipping insertion for tag "%s" in %s: tag already present at line %d.\n', tag, filePath, tagExistsIdx);
-                % Do not modify fileContent or lineShift; continue to next insertion
+                fprintf('Skipping "%s" for tag "%s" in %s: tag already present at line %d.\n', opType, tag, filePath, tagExistsIdx);
                 continue;
             end
 
             % Apply the operation
             switch opType
                 case "insert"
-                    % Insert the tagged block before the adjusted line
+                    adjustedLine = ins.line + lineShift;
+                    codeBlock = string(ins.code);
+                    taggedBlock = [startTagLine; codeBlock; endTagLine];
+
                     fileContent = [fileContent(1:adjustedLine-1); taggedBlock; fileContent(adjustedLine:end)];
-                    lineShift = lineShift + length(taggedBlock);  % Update shift by number of inserted lines
+                    lineShift = lineShift + length(taggedBlock);
                     fprintf('Inserted tag "%s" into %s at line %d.\n', tag, filePath, adjustedLine);
 
                 case "replace"
-                    % Replace the adjusted line with the tagged block
+                    adjustedLine = ins.line + lineShift;
+                    codeBlock = string(ins.code);
+                    taggedBlock = [startTagLine; codeBlock; endTagLine];
+
                     fileContent = [fileContent(1:adjustedLine-1); taggedBlock; fileContent(adjustedLine+1:end)];
-                    lineShift = lineShift + length(taggedBlock) - 1;  % Update shift by net line change
+                    lineShift = lineShift + length(taggedBlock) - 1;
                     fprintf('Replaced line %d in %s with tag "%s".\n', adjustedLine, filePath, tag);
+
+                case "wrap"
+                    adjStart = ins.start_line + lineShift;
+                    adjEnd   = ins.end_line   + lineShift;
+                    beforeBlock = string(ins.before);
+                    afterBlock  = string(ins.after);
+
+                    % Build: [before-file] [startTag] [before-lines] [original range] [after-lines] [endTag] [rest-of-file]
+                    wrappedBlock = [startTagLine; beforeBlock; fileContent(adjStart:adjEnd); afterBlock; endTagLine];
+
+                    fileContent = [fileContent(1:adjStart-1); wrappedBlock; fileContent(adjEnd+1:end)];
+                    linesAdded = length(wrappedBlock) - (adjEnd - adjStart + 1);
+                    lineShift = lineShift + linesAdded;
+                    fprintf('Wrapped lines %d-%d in %s with tag "%s".\n', adjStart, adjEnd, filePath, tag);
 
                 otherwise
                     error('Unknown operation type "%s" in file %s.', opType, filePath);

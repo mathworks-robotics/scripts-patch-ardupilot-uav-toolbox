@@ -1,0 +1,488 @@
+{
+  "files": [
+    {
+      "path": "Tools/ardupilotwaf/boards.py",
+      "comment_style": "#",
+      "insertions": [
+        {
+          "line": 163,
+          "type": "insert",
+          "tag": "simulink-lib-enable",
+          "code": [
+            "        if cfg.options.enable_simulink_app:",
+            "            env.AP_LIBRARIES += [",
+            "                'AC_Simulink'",
+            "            ]",
+            "            cfg.msg(\"Enabled Simulink controller\", 'yes')",
+            "            env.DEFINES.update(",
+            "                SIMULINK_APP_ENABLED=1",
+            "            )"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "libraries/AP_HAL_ChibiOS/HAL_ChibiOS_Class.cpp",
+      "comment_style": "//",
+      "insertions": [
+        {
+          "line": 139,
+          "type": "insert",
+          "tag": "empty-uart",
+          "code": [
+            "#if defined(SIMULINK_APP_ENABLED) && defined(DISABLE_TELEM1_CONSOLE)",
+            "       static Empty::UARTDriver serialEmptyDriver;",
+            "#endif"
+          ]
+        },
+        {
+          "line": 160,
+          "type": "replace",
+          "tag": "simulink-disable-console",
+          "code": [
+            "#if defined(SIMULINK_APP_ENABLED) && defined(DISABLE_MAVLINK_USB)",
+            "   #ifndef DISABLE_TELEM1_CONSOLE",
+            "        &serial1Driver,",
+            "   #else",
+            "        &serialEmptyDriver,",
+            "   #endif",
+            "#else",
+            "        &serial0Driver,",
+            "#endif"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "libraries/AP_SerialManager/AP_SerialManager.cpp",
+      "comment_style": "//",
+      "insertions": [
+        {
+          "line": 440,
+          "type": "insert",
+          "tag": "simulink-disable-mavlink-usb",
+          "code": [
+            "#if defined(SIMULINK_APP_ENABLED) && defined(DISABLE_MAVLINK_USB)",
+            "    state[0].protocol.set(SerialProtocol_None);",
+            "#endif"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "libraries/SITL/SIM_JSON.h",
+      "comment_style": "//",
+      "insertions": [
+        {
+          "line": 22,
+          "type": "insert",
+          "tag": "serialplant-not-enabled-default",
+          "code": [
+            "",
+            "#ifndef HAL_SIM_SERIALPLANT_ENABLED",
+            "#define HAL_SIM_SERIALPLANT_ENABLED 0",
+            "#endif"
+          ]
+        },
+        {
+          "line": 25,
+          "type": "replace",
+          "tag": "serialplant-socket-guard-and-includes",
+          "code": [
+            "#if CONFIG_HAL_BOARD == HAL_BOARD_SITL",
+            "#include <AP_HAL/utility/Socket_native.h>",
+            "#endif",
+            "",
+            "#if HAL_SIM_SERIALPLANT_ENABLED",
+            "#include \"SIM_SerialPlantProtocol.h\"",
+            "#include <AP_HAL/AP_HAL.h>",
+            "#endif"
+          ]
+        },
+        {
+          "start_line": 42,
+          "end_line": 43,
+          "type": "wrap",
+          "tag": "serialplant-sitl-guard-set-interface",
+          "before": ["#if CONFIG_HAL_BOARD == HAL_BOARD_SITL"],
+          "after": ["#endif"]
+        },
+        {
+          "start_line": 47,
+          "end_line": 67,
+          "type": "wrap",
+          "tag": "serialplant-sitl-guard-socket-members",
+          "before": ["#if CONFIG_HAL_BOARD == HAL_BOARD_SITL"],
+          "after": ["#endif"]
+        },
+        {
+          "start_line": 75,
+          "end_line": 157,
+          "type": "wrap",
+          "tag": "serialplant-sitl-guard-parser",
+          "before": ["#if CONFIG_HAL_BOARD == HAL_BOARD_SITL"],
+          "after": ["#endif"]
+        },
+        {
+          "line": 158,
+          "type": "insert",
+          "tag": "serialplant-serial-members",
+          "code": [
+            "",
+            "#if HAL_SIM_SERIALPLANT_ENABLED",
+            "    // serial plant members",
+            "    AP_HAL::UARTDriver *serial_uart;",
+            "    uint8_t serial_port;",
+            "    uint32_t serial_baud;",
+            "    uint8_t serial_parity;",
+            "    uint8_t serial_stop_bits;",
+            "    bool serial_hw_flow;",
+            "    struct rx_context serial_rx_ctx;",
+            "    uint8_t serial_num_channels;",
+            "",
+            "    void serial_init_uart();",
+            "    void serial_output_servos(const struct sitl_input &input);",
+            "    void serial_poll_incoming();",
+            "    void serial_apply_state_to_fdm(const struct decoded_state *ds);",
+            "#endif"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "libraries/SITL/SIM_JSON.cpp",
+      "comment_style": "//",
+      "insertions": [
+        {
+          "start_line": 24,
+          "end_line": 25,
+          "type": "wrap",
+          "tag": "serialplant-sitl-guard-includes",
+          "before": ["#if CONFIG_HAL_BOARD == HAL_BOARD_SITL"],
+          "after": ["#endif"]
+        },
+        {
+          "line": 61,
+          "type": "replace",
+          "tag": "serialplant-ctor-init-comma",
+          "code": [
+            "    Aircraft(frame_str)"
+          ]
+        },
+        {
+          "line": 62,
+          "type": "replace",
+          "tag": "serialplant-ctor-sock-guard",
+          "code": [
+            "#if CONFIG_HAL_BOARD == HAL_BOARD_SITL",
+            "    ,sock(true)",
+            "#endif"
+          ]
+        },
+        {
+          "start_line": 64,
+          "end_line": 69,
+          "type": "wrap",
+          "tag": "serialplant-ctor-serial-init",
+          "before": [
+            "#if HAL_SIM_SERIALPLANT_ENABLED",
+            "    printf(\"Starting SITL: JSON (SerialPlant mode)\\n\");",
+            "",
+            "    serial_uart = nullptr;",
+            "    serial_port = 5;",
+            "    serial_baud = 921600;",
+            "    serial_parity = 0;",
+            "    serial_stop_bits = 1;",
+            "    serial_hw_flow = false;",
+            "    serial_num_channels = 16;",
+            "    rx_init(&serial_rx_ctx);",
+            "",
+            "    const char *colon = strchr(frame_str, ':');",
+            "    if (colon) {",
+            "        serial_port = (uint8_t)atoi(colon + 1);",
+            "        const char *colon2 = strchr(colon + 1, ':');",
+            "        if (colon2) {",
+            "            serial_baud = (uint32_t)strtoul(colon2 + 1, nullptr, 10);",
+            "            const char *colon3 = strchr(colon2 + 1, ':');",
+            "            if (colon3) {",
+            "                if (strncasecmp(colon3 + 1, \"Even\", 4) == 0) {",
+            "                    serial_parity = 1;",
+            "                } else if (strncasecmp(colon3 + 1, \"Odd\", 3) == 0) {",
+            "                    serial_parity = 2;",
+            "                }",
+            "                const char *colon4 = strchr(colon3 + 1, ':');",
+            "                if (colon4) {",
+            "                    serial_stop_bits = (uint8_t)atoi(colon4 + 1);",
+            "                    const char *colon5 = strchr(colon4 + 1, ':');",
+            "                    if (colon5) {",
+            "                        serial_hw_flow = (atoi(colon5 + 1) != 0);",
+            "                    }",
+            "                }",
+            "            }",
+            "        }",
+            "    }",
+            "",
+            "    printf(\"SerialPlant: port=SERIAL%u baud=%u parity=%u stopbits=%u hwflow=%u\\n\",",
+            "           serial_port, (unsigned)serial_baud, serial_parity, serial_stop_bits, (unsigned)serial_hw_flow);",
+            "",
+            "    use_time_sync = false;",
+            "#else"
+          ],
+          "after": ["#endif"]
+        },
+        {
+          "start_line": 83,
+          "end_line": 97,
+          "type": "wrap",
+          "tag": "serialplant-sitl-guard-set-interface-ports",
+          "before": ["#if CONFIG_HAL_BOARD == HAL_BOARD_SITL"],
+          "after": ["#endif"]
+        },
+        {
+          "start_line": 104,
+          "end_line": 133,
+          "type": "wrap",
+          "tag": "serialplant-output-servos-branch",
+          "before": [
+            "#if HAL_SIM_SERIALPLANT_ENABLED",
+            "    serial_output_servos(input);",
+            "#else"
+          ],
+          "after": ["#endif"]
+        },
+        {
+          "start_line": 137,
+          "end_line": 232,
+          "type": "wrap",
+          "tag": "serialplant-sitl-guard-parse-sensors",
+          "before": ["#if CONFIG_HAL_BOARD == HAL_BOARD_SITL"],
+          "after": ["#endif  // CONFIG_HAL_BOARD == HAL_BOARD_SITL"]
+        },
+        {
+          "start_line": 240,
+          "end_line": 444,
+          "type": "wrap",
+          "tag": "serialplant-recv-fdm-branch",
+          "before": [
+            "#if HAL_SIM_SERIALPLANT_ENABLED",
+            "    serial_poll_incoming();",
+            "#else"
+          ],
+          "after": ["#endif  // !HAL_SIM_SERIALPLANT_ENABLED"]
+        },
+        {
+          "line": 452,
+          "type": "replace",
+          "tag": "serialplant-update-comment-send",
+          "code": [
+            "    // send servo PWMs to plant"
+          ]
+        },
+        {
+          "line": 455,
+          "type": "replace",
+          "tag": "serialplant-update-comment-recv",
+          "code": [
+            "    // receive sensor state from plant"
+          ]
+        },
+        {
+          "line": 458,
+          "type": "insert",
+          "tag": "serialplant-update-decode-block",
+          "code": [
+            "#if HAL_SIM_SERIALPLANT_ENABLED",
+            "    {",
+            "        struct decoded_state ds;",
+            "        if (serial_rx_ctx.msg_id == MSG_STATE &&",
+            "            decode_state(serial_rx_ctx.buf, serial_rx_ctx.payload_len, &ds) == 0) {",
+            "            serial_apply_state_to_fdm(&ds);",
+            "        }",
+            "    }",
+            "    frame_counter++;",
+            "#endif"
+          ]
+        },
+        {
+          "start_line": 462,
+          "end_line": 463,
+          "type": "wrap",
+          "tag": "serialplant-guard-adjust-frame",
+          "before": ["#if !HAL_SIM_SERIALPLANT_ENABLED"],
+          "after": ["#endif"]
+        },
+        {
+          "line": 473,
+          "type": "insert",
+          "tag": "serialplant-serial-methods",
+          "code": [
+            "/* ===== serial plant methods (only compiled on ChibiOS with SERIALPLANT flag) ===== */",
+            "",
+            "#if HAL_SIM_SERIALPLANT_ENABLED",
+            "",
+            "void JSON::serial_init_uart()",
+            "{",
+            "    serial_uart = hal.serial(serial_port);",
+            "    if (serial_uart == nullptr) {",
+            "        printf(\"SerialPlant: SERIAL%u not available!\\n\", serial_port);",
+            "        return;",
+            "    }",
+            "",
+            "    if (serial_port != 0) {",
+            "        serial_uart->set_unbuffered_writes(true);",
+            "        serial_uart->begin(serial_baud, 2048, 2048);",
+            "    } else {",
+            "        serial_uart->begin(serial_baud);",
+            "    }",
+            "    serial_uart->configure_parity(serial_parity);",
+            "    serial_uart->set_stop_bits(serial_stop_bits);",
+            "    if (serial_hw_flow) {",
+            "        serial_uart->set_flow_control(AP_HAL::UARTDriver::FLOW_CONTROL_ENABLE);",
+            "    }",
+            "    serial_uart->flush();",
+            "    printf(\"SerialPlant: SERIAL%u initialized at %u baud parity=%u stopbits=%u hwflow=%u\\n\",",
+            "           serial_port, (unsigned)serial_baud, serial_parity, serial_stop_bits, (unsigned)serial_hw_flow);",
+            "}",
+            "",
+            "void JSON::serial_output_servos(const struct sitl_input &input)",
+            "{",
+            "    if (serial_uart == nullptr) {",
+            "        serial_init_uart();",
+            "        if (serial_uart == nullptr) {",
+            "            return;",
+            "        }",
+            "    }",
+            "",
+            "    serial_num_channels = SRV_Channels::have_32_channels() ? 32 : 16;",
+            "",
+            "    uint8_t frame_buf[HEADER_SIZE + SERVO_32_LEN];",
+            "",
+            "    uint16_t total = encode_servo_frame(",
+            "        input.servos, serial_num_channels,",
+            "        frame_counter, (uint16_t)rate_hz,",
+            "        frame_buf, sizeof(frame_buf));",
+            "",
+            "    if (total > 0) {",
+            "        serial_uart->write(frame_buf, total);",
+            "    }",
+            "}",
+            "",
+            "void JSON::serial_poll_incoming()",
+            "{",
+            "    if (serial_uart == nullptr) {",
+            "        return;",
+            "    }",
+            "",
+            "    uint32_t available = serial_uart->available();",
+            "    while (available-- > 0) {",
+            "        uint8_t b;",
+            "        if (serial_uart->read(&b, 1) != 1) {",
+            "            break;",
+            "        }",
+            "        rx_feed_byte(&serial_rx_ctx, b);",
+            "    }",
+            "}",
+            "",
+            "void JSON::serial_apply_state_to_fdm(const struct decoded_state *ds)",
+            "{",
+            "    accel_body = Vector3f(ds->accel_body[0], ds->accel_body[1], ds->accel_body[2]);",
+            "    gyro = Vector3f(ds->gyro[0], ds->gyro[1], ds->gyro[2]);",
+            "    velocity_ef = Vector3f(ds->velocity[0], ds->velocity[1], ds->velocity[2]);",
+            "    position = Vector3d(ds->position[0], ds->position[1], ds->position[2]);",
+            "    position.xy() += origin.get_distance_NE_double(home);",
+            "",
+            "    if (ds->mask & MASK_QUATERNION) {",
+            "        Quaternion quat(ds->quaternion[0], ds->quaternion[1], ds->quaternion[2], ds->quaternion[3]);",
+            "        quat.rotation_matrix(dcm);",
+            "    } else {",
+            "        dcm.from_euler(ds->attitude[0], ds->attitude[1], ds->attitude[2]);",
+            "    }",
+            "",
+            "    if (ds->mask & MASK_RANGEFINDER) {",
+            "        for (uint8_t i = 0; i < 6; i++) {",
+            "            rangefinder_m[i] = ds->rangefinder[i];",
+            "        }",
+            "    }",
+            "",
+            "    if (ds->mask & MASK_AIRSPEED) {",
+            "        airspeed = ds->airspeed;",
+            "        airspeed_pitot = ds->airspeed;",
+            "    } else {",
+            "        velocity_air_ef = velocity_ef;",
+            "        velocity_air_bf = dcm.transposed() * velocity_air_ef;",
+            "        update_eas_airspeed();",
+            "    }",
+            "",
+            "    if (ds->mask & MASK_WINDVANE) {",
+            "        wind_vane_apparent.direction = ds->windvane_direction;",
+            "        wind_vane_apparent.speed = ds->windvane_speed;",
+            "    }",
+            "",
+            "    update_position();",
+            "",
+            "    if (ds->timestamp_s < last_timestamp_s) {",
+            "        printf(\"Old timestamp received at SerialPlant.\\n\");",
+            "        last_timestamp_s = ds->timestamp_s;",
+            "        return;",
+            "    }",
+            "",
+            "    const double dt = ds->timestamp_s - last_timestamp_s;",
+            "    last_timestamp_s = ds->timestamp_s;",
+            "    time_now_us += dt * 1.0e6;",
+            "",
+            "    if (!is_positive(dt) || dt >= 0.05) {",
+            "        return;",
+            "    }",
+            "    adjust_frame_time(1.0 / dt);",
+            "    time_advance();",
+            "}",
+            "",
+            "#endif  // HAL_SIM_SERIALPLANT_ENABLED"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "libraries/AP_HAL/SIMState.cpp",
+      "comment_style": "//",
+      "insertions": [
+        {
+          "line": 4,
+          "type": "insert",
+          "tag": "serialplant-not-enabled-default",
+          "code": [
+            "#ifndef HAL_SIM_SERIALPLANT_ENABLED",
+            "#define HAL_SIM_SERIALPLANT_ENABLED 0",
+            "#endif"
+          ]
+        },
+        {
+          "line": 25,
+          "type": "insert",
+          "tag": "serialplant-include-json",
+          "code": [
+            "#if HAL_SIM_SERIALPLANT_ENABLED",
+            "#include <SITL/SIM_JSON.h>",
+            "#endif"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "wscript",
+      "comment_style": "#",
+      "insertions": [
+        {
+          "line": 289,
+          "type": "insert",
+          "tag": "simulink-wscript-flag",
+          "code": [
+            "    g.add_option('--enable-simulink-app', action='store_true',",
+            "                 default=False,",
+            "                 help=\"Enables Simulink generated application\")"
+          ]
+        }
+      ]
+    }
+  ]
+}
